@@ -20,8 +20,11 @@ jobs:
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
+      - name: List files (debug)
+        run: ls -la
       - name: Build unsigned .app
         run: |
+          set -o pipefail
           xcodebuild -project SensiUltralock.xcodeproj \
                      -scheme SensiUltralock \
                      -configuration Release \
@@ -30,13 +33,22 @@ jobs:
                      CODE_SIGN_STYLE=Manual \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
-                     build
+                     build 2>&1 | tee build.log
+      - name: Show build errors
+        if: failure()
+        run: |
+          echo "=== Last 50 lines of build log ==="
+          tail -50 build.log
+          echo "=== Checking .app existence ==="
+          find build -name "*.app" -type d 2>/dev/null || echo "No .app found"
       - name: Package .app
+        if: success()
         run: |
           APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
           mkdir -p build/output
           cp -R "$APP_PATH" build/output/SensiUltralock.app
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SensiUltralock-Unsigned
