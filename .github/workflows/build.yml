@@ -3,26 +3,35 @@ name: Build iOS App
 on:
   push:
     branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build .app (unsigned — for sideloading)
     runs-on: macos-14
     timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
-      - name: Install XcodeGen 2.40.0 (compatible)
+      - name: Install XcodeGen
         run: |
-          curl -L -o xcodegen.zip "https://github.com/YonasKolb/XcodeGen/releases/download/2.40.0/xcodegen-2.40.0-universal.zip"
-          unzip -o xcodegen.zip -d xcodegen
-          echo "$(pwd)/xcodegen" >> $GITHUB_PATH
+          brew untap aws/tap 2>/dev/null || true
+          HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
-      - name: Generate project
+      - name: Generate Xcode project
         run: xcodegen generate
+
+      - name: Downgrade project format for Xcode 15.4
+        run: |
+          PBX="SensiUltralock.xcodeproj/project.pbxproj"
+          sed -i '' 's/objectVersion = [0-9][0-9];/objectVersion = 56;/' "$PBX"
+          sed -i '' 's/compatibilityVersion = "Xcode [0-9][0-9]*\.[0-9]*"/compatibilityVersion = "Xcode 14.0"/' "$PBX"
 
       - name: Build unsigned .app
         run: |
@@ -36,14 +45,25 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      build
 
-      - name: Package .app
+      - name: Locate and package .app
         run: |
           APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
           mkdir -p build/output
           cp -R "$APP_PATH" build/output/SensiUltralock.app
+          cd build/output && zip -r ../SensiUltralock.zip SensiUltralock.app
+          echo "✅ .app size: $(du -sh build/output/SensiUltralock.app | cut -f1)"
 
-      - name: Upload artifact
+      - name: Upload .app artifact
         uses: actions/upload-artifact@v4
         with:
           name: SensiUltralock-Unsigned
           path: build/output/SensiUltralock.app
+          compression-level: 9
+
+      - name: Upload .zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SensiUltralock-Zip
+          path: build/SensiUltralock.zip
+          compression-level: 9
+
