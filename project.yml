@@ -2,12 +2,15 @@ name: SensiUltralock
 options:
   bundleIdPrefix: com.aistudio
   deploymentTarget:
-    iOS: "15.0"
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+
 settings:
   base:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
+
 targets:
   SensiUltralock:
     type: application
@@ -19,7 +22,7 @@ targets:
         INFOPLIST_FILE: SensiUltralock/Resources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.aistudio.ultralock-optimizer.ios
         TARGETED_DEVICE_FAMILY: "1"
-        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
