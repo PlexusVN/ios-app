@@ -1,0 +1,40 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build unsigned .app
+        run: |
+          xcodebuild -project SensiUltralock.xcodeproj \
+                     -scheme SensiUltralock \
+                     -configuration Release \
+                     -sdk iphoneos \
+                     -derivedDataPath build/derived \
+                     CODE_SIGN_STYLE=Manual \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO \
+                     build
+      - name: Package .app
+        run: |
+          APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
+          mkdir -p build/output
+          cp -R "$APP_PATH" build/output/SensiUltralock.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SensiUltralock-Unsigned
+          path: build/output/SensiUltralock.app
