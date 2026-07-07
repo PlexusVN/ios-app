@@ -3,13 +3,11 @@ name: Build iOS App
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build .app (unsigned — for sideloading)
+    name: Build unsigned .ipa (for sideloading)
     runs-on: macos-14
     timeout-minutes: 30
 
@@ -45,25 +43,18 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      build
 
-      - name: Locate and package .app
+      - name: Package .ipa
         run: |
           APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
-          mkdir -p build/output
-          cp -R "$APP_PATH" build/output/SensiUltralock.app
-          cd build/output && zip -r ../SensiUltralock.zip SensiUltralock.app
-          echo "✅ .app size: $(du -sh build/output/SensiUltralock.app | cut -f1)"
+          mkdir -p build/output/Payload
+          cp -R "$APP_PATH" build/output/Payload/
+          cd build/output
+          zip -r ../SensiUltralock.ipa Payload/
+          echo "✅ .ipa size: $(du -sh ../SensiUltralock.ipa | cut -f1)"
 
-      - name: Upload .app artifact
+      - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SensiUltralock-Unsigned
-          path: build/output/SensiUltralock.app
-          compression-level: 9
-
-      - name: Upload .zip artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SensiUltralock-Zip
-          path: build/SensiUltralock.zip
-          compression-level: 9
-
+          name: SensiUltralock-Unsigned-IPA
+          path: build/SensiUltralock.ipa
+          compression-level: 0
