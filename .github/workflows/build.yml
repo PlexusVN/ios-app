@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+env:
+  HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+
 jobs:
   build:
     runs-on: macos-14
