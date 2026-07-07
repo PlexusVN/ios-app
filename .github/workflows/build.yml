@@ -20,8 +20,10 @@ jobs:
           brew untap aws/tap 2>/dev/null || true
           HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
-      - name: Generate project
-        run: xcodegen generate
+      - name: Generate project & fix format
+        run: |
+          xcodegen generate
+          sed -i '' 's/objectVersion = [0-9][0-9]/objectVersion = 73/' SensiUltralock.xcodeproj/project.pbxproj
 
       - name: Build unsigned .app
         run: |
