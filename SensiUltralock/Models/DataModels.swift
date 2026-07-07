@@ -26,6 +26,15 @@ struct AuthResult: Decodable {
         serverTime = try container.decodeIfPresent(String.self, forKey: .serverTime) ?? ""
         type = try container.decodeIfPresent(String.self, forKey: .type) ?? ""
     }
+
+    init(success: Bool, status: String, message: String, expiresAt: String, serverTime: String, type: String) {
+        self.success = success
+        self.status = status
+        self.message = message
+        self.expiresAt = expiresAt
+        self.serverTime = serverTime
+        self.type = type
+    }
 }
 
 enum AuthState {
