@@ -5,26 +5,27 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
-env:
-  HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
-
 jobs:
   build:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
-      - name: Install XcodeGen
-        run: brew install xcodegen
+
+      - name: Install XcodeGen (direct binary)
+        run: |
+          curl -L -o xcodegen.zip "https://github.com/YonasKolb/XcodeGen/releases/download/2.45.4/xcodegen-2.45.4-universal.zip"
+          unzip -o xcodegen.zip -d xcodegen-bin
+          echo "$(pwd)/xcodegen-bin" >> $GITHUB_PATH
+
       - name: Generate project
         run: xcodegen generate
-      - name: List files (debug)
-        run: ls -la
+
       - name: Build unsigned .app
         run: |
-          set -o pipefail
           xcodebuild -project SensiUltralock.xcodeproj \
                      -scheme SensiUltralock \
                      -configuration Release \
@@ -33,22 +34,15 @@ jobs:
                      CODE_SIGN_STYLE=Manual \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
-                     build 2>&1 | tee build.log
-      - name: Show build errors
-        if: failure()
-        run: |
-          echo "=== Last 50 lines of build log ==="
-          tail -50 build.log
-          echo "=== Checking .app existence ==="
-          find build -name "*.app" -type d 2>/dev/null || echo "No .app found"
+                     build
+
       - name: Package .app
-        if: success()
         run: |
           APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
           mkdir -p build/output
           cp -R "$APP_PATH" build/output/SensiUltralock.app
+
       - name: Upload artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SensiUltralock-Unsigned
