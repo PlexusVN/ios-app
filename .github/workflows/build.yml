@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build .zip (Appetize.io + sideload)
+    name: Build .ipa (unsigned, sideload-ready)
     runs-on: macos-14
     timeout-minutes: 30
 
@@ -31,31 +31,30 @@ jobs:
           sed -i '' 's/objectVersion = [0-9][0-9];/objectVersion = 56;/' "$PBX"
           sed -i '' 's/compatibilityVersion = "Xcode [0-9][0-9]*\.[0-9]*"/compatibilityVersion = "Xcode 14.0"/' "$PBX"
 
-      - name: Build for iOS Simulator (Appetize-ready)
+      - name: Build unsigned .app for device
         run: |
           xcodebuild -project SensiUltralock.xcodeproj \
                      -scheme SensiUltralock \
                      -configuration Release \
-                     -sdk iphonesimulator \
-                     -destination "generic/platform=iOS Simulator" \
+                     -sdk iphoneos \
                      -derivedDataPath build/derived \
                      CODE_SIGN_STYLE=Manual \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
                      build
 
-      - name: Package .zip
+      - name: Package .ipa
         run: |
           APP_PATH=$(find build/derived -name "*.app" -type d | head -1)
-          mkdir -p build/output
-          cp -R "$APP_PATH" build/output/SensiUltralock.app
+          mkdir -p build/output/Payload
+          cp -R "$APP_PATH" build/output/Payload/
           cd build/output
-          zip -r ../SensiUltralock.zip SensiUltralock.app
-          echo "✅ .zip size: $(du -sh ../SensiUltralock.zip | cut -f1)"
+          zip -r ../SensiUltralock.ipa Payload/
+          echo "✅ .ipa size: $(du -sh ../SensiUltralock.ipa | cut -f1)"
 
-      - name: Upload .zip artifact
+      - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SensiUltralock-Appetize
-          path: build/SensiUltralock.zip
+          name: SensiUltralock-IPA
+          path: build/SensiUltralock.ipa
           compression-level: 0
