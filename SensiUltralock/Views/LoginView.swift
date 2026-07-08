@@ -207,7 +207,7 @@ struct LoginView: View {
                         .padding(.horizontal, w * 0.06)
                         .frame(minHeight: h - safeArea.top - safeArea.bottom)
                     }
-                    .scrollDismissesKeyboard(.interactively)
+                    .modifier(KeyboardDismissModifier())
                     .onChange(of: isKeyFieldFocused) { focused in
                         if focused {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -256,6 +256,16 @@ struct LoginView: View {
                     errorMessage = result?.message ?? "Mã kích hoạt không hợp lệ hoặc đã hết hạn!"
                 }
             }
+        }
+    }
+}
+
+struct KeyboardDismissModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16, *) {
+            content.scrollDismissesKeyboard(.interactively)
+        } else {
+            content
         }
     }
 }
