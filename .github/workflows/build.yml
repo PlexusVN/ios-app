@@ -26,6 +26,8 @@ jobs:
         run: |
           rm -rf SensiUltralock.xcodeproj
           xcodegen generate
+          sed -i '' 's/objectVersion = 77/objectVersion = 56/g' SensiUltralock.xcodeproj/project.pbxproj
+          sed -i '' 's/archiveVersion = 2/archiveVersion = 1/g' SensiUltralock.xcodeproj/project.pbxproj
 
       - name: Build unsigned .app for device
         run: |
