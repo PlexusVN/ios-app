@@ -1,0 +1,176 @@
+import Foundation
+import UIKit
+import Security
+import CommonCrypto
+import Network
+
+// MARK: - Keychain Manager
+
+struct KeychainManager {
+    static let service = "com.aistudio.ultralock-optimizer.ios"
+
+    static func save(key: String, value: String) {
+        guard let data = value.data(using: .utf8) else { return }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data
+        ]
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func read(key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+// MARK: - Saved Credentials
+
+struct SavedCredentials {
+    let key: String
+    let type: String
+    let expiresAt: String
+}
+
+// MARK: - HWID Generator
+
+func getHWID() -> String {
+    let identifier = UIDevice.current.identifierForVendor?.uuidString ?? "UNKNOWN_IOS"
+    guard let data = identifier.data(using: .utf8) else {
+        return "UNKNOWN-" + UUID().uuidString.prefix(8)
+    }
+    var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+    data.withUnsafeBytes { buffer in
+        _ = CC_SHA256(buffer.baseAddress, CC_LONG(data.count), &hash)
+    }
+    let hex = hash.prefix(8).map { String(format: "%02x", $0) }.joined()
+    return hex
+}
+
+// MARK: - Credentials Persistence
+
+private let CRED_KEY_KEY = "saved_license_key"
+private let CRED_TYPE_KEY = "saved_key_type"
+private let CRED_EXPIRY_KEY = "saved_expires_at"
+
+func saveCredentials(key: String, type: String, expiresAt: String) {
+    KeychainManager.save(key: CRED_KEY_KEY, value: key)
+    UserDefaults.standard.set(type, forKey: CRED_TYPE_KEY)
+    UserDefaults.standard.set(expiresAt, forKey: CRED_EXPIRY_KEY)
+}
+
+func loadSavedCredentials() -> SavedCredentials? {
+    guard let key = KeychainManager.read(key: CRED_KEY_KEY), !key.isEmpty else { return nil }
+    let type = UserDefaults.standard.string(forKey: CRED_TYPE_KEY) ?? "basic"
+    let expiresAt = UserDefaults.standard.string(forKey: CRED_EXPIRY_KEY) ?? ""
+    return SavedCredentials(key: key, type: type, expiresAt: expiresAt)
+}
+
+func clearSavedCredentials() {
+    KeychainManager.delete(key: CRED_KEY_KEY)
+    UserDefaults.standard.removeObject(forKey: CRED_TYPE_KEY)
+    UserDefaults.standard.removeObject(forKey: CRED_EXPIRY_KEY)
+}
+
+// MARK: - Network Check
+
+func isNetworkAvailable() -> Bool {
+    let monitor = NWPathMonitor()
+    let semaphore = DispatchSemaphore(value: 0)
+    var available = false
+    monitor.pathUpdateHandler = { path in
+        available = path.status == .satisfied
+        semaphore.signal()
+    }
+    let queue = DispatchQueue(label: "NetworkMonitor")
+    monitor.start(queue: queue)
+    _ = semaphore.wait(timeout: .now() + 2)
+    monitor.cancel()
+    return available
+}
+
+// MARK: - Server Health Check
+
+func checkServerConnection() async -> Bool {
+    guard let url = URL(string: "https://plexus-auth-api-o01h.onrender.com/api/health") else { return false }
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.timeoutInterval = 5
+    do {
+        let (_, response) = try await URLSession.shared.data(for: request)
+        return (response as? HTTPURLResponse)?.statusCode == 200
+    } catch { return false }
+}
+
+// MARK: - Plexus Auth API
+
+fileprivate let SECRET = "ios-auth-key"
+
+func verifyLicenseKey(key: String) async -> AuthResult? {
+    let hwid = getHWID()
+    guard let encodedKey = key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+          let encodedHWID = hwid.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+          let encodedSecret = SECRET.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+          let url = URL(string: "https://plexus-auth-api-o01h.onrender.com/api/verify?key=\(encodedKey)&hwid=\(encodedHWID)&secret=\(encodedSecret)") else {
+        return nil
+    }
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.timeoutInterval = 10
+
+    do {
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(AuthResult.self, from: data)
+        return result
+    } catch {
+        return AuthResult(
+            success: false,
+            status: "error",
+            message: "Kết nối máy chủ Plexus thất bại: \(error.localizedDescription)",
+            expiresAt: "",
+            serverTime: "",
+            type: ""
+        )
+    }
+}
+
+// MARK: - Feature State Persistence
+
+private let ACTIVE_FEATURES_KEY = "active_features"
+
+func saveActiveFeatures(_ features: Set<String>) {
+    UserDefaults.standard.set(Array(features), forKey: ACTIVE_FEATURES_KEY)
+}
+
+func loadActiveFeatures() -> Set<String> {
+    Set(UserDefaults.standard.stringArray(forKey: ACTIVE_FEATURES_KEY) ?? [])
+}
+
+func computeKeyType(from typeString: String) -> KeyType {
+    let t = typeString.lowercased().trimmingCharacters(in: .whitespaces)
+    if t.contains("vip") || t.contains("admin") { return .vip }
+    if t.contains("pro") { return .pro }
+    return .basic
+}
