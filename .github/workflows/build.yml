@@ -23,7 +23,9 @@ jobs:
           HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          rm -rf SensiUltralock.xcodeproj
+          xcodegen generate
 
       - name: Build unsigned .app for device
         run: |
